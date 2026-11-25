@@ -1,3 +1,4 @@
+
 name: Spring Boot CI CD Pipeline
 
 on:
@@ -6,17 +7,34 @@ on:
       - main
 
 jobs:
-
   build-test-docker:
-
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
 
-    steps:
+    # Start MySQL for Spring Boot tests
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root123
+          MYSQL_DATABASE: studentdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot123"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
-      # 1. Checkout source code
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/studentdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root123
+
+    steps:
+      # 1. Checkout project
       - name: Checkout GitHub Repository
         uses: actions/checkout@v4
 
@@ -28,7 +46,7 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # 3. Maven Build and JUnit Testing
+      # 3. Build and test Spring Boot application
       - name: Maven Build and Test
         run: mvn -B clean verify
 
@@ -43,12 +61,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 6. Build and Push Docker Image
+      # 6. Build and push Docker image
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: DockerFile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/springboot-demo:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/springboot-demo:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/student-management:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/student-management:${{ github.sha }}
